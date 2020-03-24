@@ -21,9 +21,6 @@ library(leaflet.extras)
 df_ebd_ab_all <- read_delim("./data/base/ebd_CA-AB_prv_relJan-2020.txt",
                            delim = "\t", escape_double = FALSE, trim_ws = TRUE)
 
-# Postal codes of Alberta users
-df_ab_users_pc <- read_csv("./data/base/ebd_ab_userspc.csv")
-
 # Alberta counties
 ab_prov <- sf::st_read("./data/base/spatial/ab_counties_md.shp", stringsAsFactors = F, quiet = T) %>%
   sf::st_transform("+init=epsg:4326") %>%
