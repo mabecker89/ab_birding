@@ -101,7 +101,7 @@ ab_ebird_hotspots <- ab_prov %>%
   
   hideGroup("Imagery")
 
-htmlwidgets::saveWidget(ab_ebird_hotspots, file = "./docs/ab_ebird_hotpsots.html")
+htmlwidgets::saveWidget(ab_ebird_hotspots, file = "ab_hs_map.html", selfcontained = TRUE)
 
 
 
