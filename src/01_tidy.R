@@ -1,8 +1,9 @@
 #-------------------------------------------------------------------------------
 
+# Title: 01_tidy
 # Date: March 2020
 
-# Description: Cleaning the ebird (Jan 2020) dataset
+# Description: Cleaning the ebird (Jan 2020) dataset. 
 
 #-------------------------------------------------------------------------------
 
@@ -10,8 +11,10 @@
 
 library(tidyverse)
 library(lubridate)
-library(leaflet)
-library(leaflet.extras)
+library(janitor)
+library(sf)
+#library(leaflet)
+#library(leaflet.extras)
 
 #-------------------------------------------------------------------------------
 
@@ -21,10 +24,8 @@ library(leaflet.extras)
 df_ebd_ab_all <- read_delim("./data/base/ebd_CA-AB_prv_relJan-2020.txt",
                            delim = "\t", escape_double = FALSE, trim_ws = TRUE)
 
-# Alberta counties
-ab_prov <- sf::st_read("./data/base/spatial/ab_counties_md.shp", stringsAsFactors = F, quiet = T) %>%
-  sf::st_transform("+init=epsg:4326") %>%
-  select(MD_NAME)
+# Alberta users' postal codes
+df_pc_all <- read_csv("./data/base/ebd_ab_userspc.csv")
 
 #-------------------------------------------------------------------------------
 
@@ -32,33 +33,77 @@ ab_prov <- sf::st_read("./data/base/spatial/ab_counties_md.shp", stringsAsFactor
 
 # Subset observations:
 df_ebd_ab_sub <- df_ebd_ab_all %>%
-  # Remove spaces from column names
-  rename_all(~gsub(" ", ".", .x)) %>%
+  # Clean up column names
+  clean_names(case = "snake") %>%
   # Remove observations pre-2009
-  mutate(OBSERVATION.DATE = ymd(OBSERVATION.DATE)) %>%
-  filter(OBSERVATION.DATE >= "2009-01-01") %>%
-  select(COMMON.NAME, SCIENTIFIC.NAME, COUNTY, IBA.CODE, BCR.CODE,
-         LOCALITY:OBSERVATION.DATE, OBSERVER.ID, SAMPLING.EVENT.IDENTIFIER,
-         GROUP.IDENTIFIER, TRIP.COMMENTS)
+  mutate(observation_date = ymd(observation_date)) %>%
+  filter(observation_date >= "2009-01-01") %>%
+  select(common_name, scientific_name, county, iba_code, bcr_code,
+         locality:observation_date, observer_id, sampling_event_identifier,
+         group_identifier, trip_comments)
+
+# Retrieve number of checklists and unique species for each locality (hotspot or personal)
+df_loc_check <- df_ebd_ab_sub %>%
+  filter(locality_type == "H" | locality_type == "P") %>%
+  group_by(locality, locality_id) %>%
+  summarise(n_checklist = n_distinct(sampling_event_identifier),
+            n_species = n_distinct(scientific_name))
 
 # Hotspots
 df_hotspots <- df_ebd_ab_sub %>%
-  filter(LOCALITY.TYPE == "H") %>%
-  select(LOCALITY, LOCALITY.ID, LATITUDE, LONGITUDE) %>%
-  distinct()
-
-# Retrieve number of checklists and unique species for each hotspot
-df_hotspot_checklists <- df_ebd_ab_sub %>%
-  filter(LOCALITY.TYPE == "H") %>%
-  group_by(LOCALITY, LOCALITY.ID) %>%
-  summarise(n_checklist = n_distinct(SAMPLING.EVENT.IDENTIFIER),
-            n_species = n_distinct(SCIENTIFIC.NAME))
-
-# Append checklist and species info to hotspot df
-df_hotspots_full <- df_hotspots %>%
-  left_join(df_hotspot_checklists, by = c("LOCALITY", "LOCALITY.ID"))
+  filter(locality_type == "H") %>%
+  select(locality, locality_id, longitude, latitude) %>%
+  distinct() %>%
+  left_join(df_loc_check, by = c("locality", "locality_id")) 
   # Only include hotspots with >= 50 checklists since 2009
   # filter(n_checklist >= 50)
+
+df_hotspots %>%
+  select(locality_id, longitude, latitude) %>%
+  write_csv("./data/processed/ab-ebd-hotspot-locations.csv")
+
+# Personal
+df_personal <- df_ebd_ab_sub %>%
+  filter(locality_type == "P") %>%
+  select(locality, locality_id, longitude, latitude) %>%
+  distinct() %>%
+  left_join(df_loc_check, by = c("locality", "locality_id"))
+
+# 'Person-trips' - unique combinations of location, date, and observer.
+df_pt <- df_ebd_ab_sub %>%
+  distinct(latitude, longitude, observation_date, observer_id)
+
+
+
+#-------------------------------------------------------------------------------
+
+# Clean postal code data
+
+df_ab_pc_locations <- read_csv("./data/base/MultipleEnhancedPostalCodeLocations.csv") %>%
+  filter(PROV == "AB",
+         SLI == "1") %>%
+  select(postal_code = POSTALCODE, longitude = HP_LONG, latitude = HP_LAT)
+  
+df_pc_sub <- df_ab_users_pc %>%
+  clean_names(case = "snake") %>%
+  mutate(postal_code = toupper(post_code),
+         postal_code = str_remove(postal_code, " ")) %>%
+  filter(nchar(postal_code) == "6") %>%
+  left_join(df_ab_pc_locations, by = "postal_code") %>%
+  filter(!is.na(longitude)) %>%
+  select(-c(post_code, observer_id)) %>%
+  distinct()
+
+write_csv(df_pc_sub, "./data/processed/ab-ebdusers-pc-locations-distinct.csv")
+
+#-------------------------------------------------------------------------------
+
+# Let's make a leaflet map!
+
+# Alberta counties
+ab_prov <- sf::st_read("./data/base/spatial/ab_counties_md.shp", stringsAsFactors = F, quiet = T) %>%
+  sf::st_transform("+init=epsg:4326") %>%
+  select(MD_NAME)
 
 # Join county information to hotspots
 df_hs_county <- df_hotspots_full %>%
@@ -67,8 +112,6 @@ df_hs_county <- df_hotspots_full %>%
   filter(!is.na(MD_NAME)) %>%
   group_by(MD_NAME) %>%
   top_n(n = 5, wt = n_checklist)
-
-# Let's make a leaflet map!
 
 ab_ebird_hotspots <- ab_prov %>%
   leaflet() %>%
