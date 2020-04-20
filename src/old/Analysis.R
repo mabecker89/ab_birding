@@ -167,7 +167,7 @@ simple_edmcgy <- distances_edmcgy %>%
 
 # library(ggmap)
 
-# register_google(key = 'AIzaSyA3uieMViL19nc4B5m_8qYvCuV1kmAw2to')
+# register_google(key = '')
 
 # driving_other <- bind_rows(
 #   apply(
