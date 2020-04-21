@@ -69,11 +69,14 @@ df_personal <- df_ebd_ab_sub %>%
   distinct() %>%
   left_join(df_loc_check, by = c("locality", "locality_id"))
 
-# 'Person-trips' - unique combinations of location, date, and observer.
+# 'Person-trips' - unique combinations of locality, date, sampling event, and observer
 df_pt <- df_ebd_ab_sub %>%
-  distinct(latitude, longitude, observation_date, observer_id)
+  filter(locality_type == "H") %>%
+  select(locality, locality_id, observer_id, observation_date) %>%
+  distinct()
 
-
+df_pt %>%
+  write_csv("./data/processed/ab-ebdusers-person-trips.csv")
 
 #-------------------------------------------------------------------------------
 
@@ -84,17 +87,16 @@ df_ab_pc_locations <- read_csv("./data/base/MultipleEnhancedPostalCodeLocations.
          SLI == "1") %>%
   select(postal_code = POSTALCODE, longitude = HP_LONG, latitude = HP_LAT)
   
-df_pc_sub <- df_ab_users_pc %>%
+df_pc_sub <- df_pc_all %>%
   clean_names(case = "snake") %>%
   mutate(postal_code = toupper(post_code),
          postal_code = str_remove(postal_code, " ")) %>%
   filter(nchar(postal_code) == "6") %>%
   left_join(df_ab_pc_locations, by = "postal_code") %>%
   filter(!is.na(longitude)) %>%
-  select(-c(post_code, observer_id)) %>%
-  distinct()
+  select(-post_code)
 
-write_csv(df_pc_sub, "./data/processed/ab-ebdusers-pc-locations-distinct.csv")
+write_csv(df_pc_sub, "./data/processed/ab-ebdusers-pc-locations.csv")
 
 #-------------------------------------------------------------------------------
 
