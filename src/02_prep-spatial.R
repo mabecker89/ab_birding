@@ -15,6 +15,7 @@ library(readr)
 library(dplyr)
 library(stringr)
 library(purrr)
+library(keyring)
 
 #-------------------------------------------------------------------------------
 
@@ -62,10 +63,22 @@ df_euc_dist <- sf_pc %>%
          euc_distance_km = euc_distance / 1000) %>%
   select(postal_code, locality_id, euc_distance_km)
 
+write_csv(df_euc_dist, "./data/processed/pc-hotspot-euclidean-distances.csv")
+
 # Distances less than 80 and greater than 20 km - i.e., a typical day trip.
 df_euc_dist_20_80 <- df_euc_dist %>%
   filter(euc_distance_km <= 80,
          euc_distance_km >= 20)
+
+# Distance between 5 and 20 km
+df_euc_dist_5_20 <- df_euc_dist %>%
+  filter(euc_distance_km < 20, # just less than (<) because we captured == 20 above.
+         euc_distance_km >= 5)
+
+# Distance between 80 and 120 km
+df_euc_dist_80_120 <- df_euc_dist %>%
+  filter(euc_distance_km <= 120, 
+         euc_distance_km > 80) # just greater than (>) because we captured == 80 above.
 
 #-------------------------------------------------------------------------------
 
@@ -94,7 +107,35 @@ df_pc_other_loc <- df_pt_pc %>%
   filter(!str_detect(postal_code, "^T6|^T5|^T3|^T2"))
 
 # Prep combinations for {ggmap} mapdist() to calculate driving time/distance
-df_prep <- df_dist_20_80 %>%
+df_prep_20_80 <- df_euc_dist_20_80 %>%
+  extract(postal_code, into = "fsa", regex = "(^.{3})", remove = FALSE) %>%
+  left_join(df_fsa_centroid, by = "fsa") %>%
+  mutate(pc_loc = paste0(latitude, ",", longitude)) %>%
+  select(-c(longitude, latitude)) %>%
+  left_join(df_pc_other_loc, by = "postal_code") %>%
+  mutate(pc_loc = ifelse(pc_loc == "NA,NA", paste0(latitude, ",", longitude), pc_loc)) %>%
+  select(-c(longitude, latitude)) %>%
+  left_join(df_hot_loc, by = "locality_id") %>%
+  mutate(hot_loc = paste0(latitude, ",", longitude)) %>%
+  select(pc_loc, hot_loc) %>%
+  distinct()
+
+# Prep combinations for {{gmap}} mapdist() -> 5-20km combos.
+df_prep_5_20 <- df_euc_dist_5_20 %>%
+  extract(postal_code, into = "fsa", regex = "(^.{3})", remove = FALSE) %>%
+  left_join(df_fsa_centroid, by = "fsa") %>%
+  mutate(pc_loc = paste0(latitude, ",", longitude)) %>%
+  select(-c(longitude, latitude)) %>%
+  left_join(df_pc_other_loc, by = "postal_code") %>%
+  mutate(pc_loc = ifelse(pc_loc == "NA,NA", paste0(latitude, ",", longitude), pc_loc)) %>%
+  select(-c(longitude, latitude)) %>%
+  left_join(df_hot_loc, by = "locality_id") %>%
+  mutate(hot_loc = paste0(latitude, ",", longitude)) %>%
+  select(pc_loc, hot_loc) %>%
+  distinct()
+
+# Prep combinations for {{gmap}} mapdist() -> 5-20km combos.
+df_prep_80_120 <- df_euc_dist_80_120 %>%
   extract(postal_code, into = "fsa", regex = "(^.{3})", remove = FALSE) %>%
   left_join(df_fsa_centroid, by = "fsa") %>%
   mutate(pc_loc = paste0(latitude, ",", longitude)) %>%
@@ -119,6 +160,8 @@ register_google(key = key_get("apikey", keyring = "google"))
 # Wrap mapdist in `safely` so that it doesn't fail when query comes back empty
 safe_mapdist <- safely(mapdist)
 
+df_prep <- df_prep_80_120
+
 df_drive_dist <- df_prep %>%
   mutate(distance = map2(.x = pc_loc, .y = hot_loc, .f = ~ safe_mapdist(.x, .y, mode = "driving", override_limit = TRUE)),
          km = map(.x = distance, .f = ~ pluck(.x$result[["km"]])),
@@ -130,7 +173,7 @@ df_drive_dist <- df_prep %>%
 df_drive_dist %>%
   filter(is.na(km)) %>%
   select(pc_loc, hot_loc) %>%
-  write_csv("./data/processed/missing-driving-dist-time.csv")
+  write_csv("./data/processed/missing-driving-dist-time_80-120.csv")
 
 #-------------------------------------------------------------------------------
 
@@ -159,7 +202,7 @@ df_drive_dist_labs <- df_drive_dist %>%
   select(locality_id, hot_loc, postal_code, pc_loc, km, hours)
   
 df_drive_dist_labs %>%
-  write_csv("./data/processed/ab-ebd-pc-hotspot-driving-dist-time.csv")
+  write_csv("./data/processed/ab-ebd-pc-hotspot-driving-dist-time_80-120km.csv")
 
 #-------------------------------------------------------------------------------
 
