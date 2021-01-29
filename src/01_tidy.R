@@ -9,9 +9,7 @@
 
 # Load packages
 
-library(readr)
-library(dplyr)
-library(lubridate)
+library(tidyverse)
 library(janitor)
 
 #-------------------------------------------------------------------------------
