@@ -9,6 +9,7 @@
 
 # Load packages
 library(tidyverse)
+library(lubridate)
 
 #-------------------------------------------------------------------------------
 
@@ -30,6 +31,8 @@ df_euc_dist <- read_csv("./data/processed/pc-hotspot-euclidean-distances.csv")
 df_hot_loc <- read_csv("./data/processed/ab-ebd-hotspot-locations.csv")
 
 #-------------------------------------------------------------------------------
+travel_cutoff_lo = 5
+travel_cutoff_hi = 120
 
 # Retrieve relevant person-trips (have postal codes, between 5 - 120 km)
 
@@ -38,7 +41,7 @@ df_pt_rel <- df_pt %>%
   # Filter out trips where we don't have postal code info; might want these later though.
   filter(!is.na(postal_code)) %>%
   left_join(df_euc_dist, by = c("postal_code", "locality_id")) %>%
-  filter(euc_distance_km <= 120 & euc_distance_km >= 5) %>%
+  filter(euc_distance_km <= travel_cutoff_hi & euc_distance_km >= travel_cutoff_lo) %>%
   select(observer_id, observation_date, locality_id, locality) # missing Kanaskis travel costs. 
 
 # Calculate trip counts by month-year 
@@ -77,8 +80,8 @@ df_modeling <- crossing(observer_id, locality_id) %>%
   left_join(df_pc_sub, by = "observer_id") %>%
   select(-c(latitude, longitude)) %>%
   left_join(df_euc_dist, by = c("postal_code", "locality_id")) %>%
-  # Only keep combos we're interested (i.e. 5-120km)
-  filter(euc_distance_km <= 120 & euc_distance_km >= 5) %>%
+  # Only keep combos we're interested (i.e. 1-200km)
+  filter(euc_distance_km <= travel_cutoff_hi & euc_distance_km >= travel_cutoff_lo) %>%
   crossing(month, year) %>%
   # Truncate at Jan 2020
   filter(!(year == "2020" & !month == "Jan")) %>%
@@ -97,9 +100,13 @@ df_modeling <- crossing(observer_id, locality_id) %>%
   filter(relevant_choice == "1") %>%
   select(observer_id:n_trips)
 
+# Investigate people with missing travel cost data
+df_test = df_modeling %>%
+  filter(is.na(cost_total)) %>%
+  distinct(observer_id) %>%
+  left_join(df_pc_sub, by = "observer_id")
 
-
-  
+hist(df_modeling$cost_total)
 
 
 

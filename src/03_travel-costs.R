@@ -41,10 +41,3 @@ df_travel_costs <- df_drive_dist_labs %>%
   select(locality_id, postal_code, cost_time, cost_driving, cost_total)
 
 write_csv(df_travel_costs, "./data/processed/ab-ebd-travel-costs.csv")
-
-
-
-
-
-
-
