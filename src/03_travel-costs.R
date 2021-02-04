@@ -37,7 +37,7 @@ df_travel_costs <- df_drive_dist_labs %>%
   mutate(cost_time = 2 * opp_time * (med_net_15 / yearly_hours) * hours,
          cost_driving = 2 * vehicle_cost * km,
          cost_total = cost_time + cost_driving,
-         cost_total = round(cost_total, digits = 2)) %>%
-  select(locality_id, postal_code, cost_time, cost_driving, cost_total)
+         cost_total = cost_total) %>%
+  select(locality_id, postal_code, cost_time, cost_driving, cost_total, hours)
 
 write_csv(df_travel_costs, "./data/processed/ab-ebd-travel-costs.csv")

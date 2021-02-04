@@ -108,6 +108,10 @@ df_test = df_modeling %>%
 
 hist(df_modeling$cost_total)
 
+df_test = df_modeling %>%
+group_by(n_trips) %>%
+  summarise(count = n()) 
+
 
 
 
